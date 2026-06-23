@@ -15,5 +15,5 @@ class PPOAgent:
 
     def act(self, observation):
         obs = np.asarray(observation)
-        action, _ = self.model.predict(obs, deterministic=True)
+        action, _ = self.model.predict(obs, deterministic=False)
         return int(action)
