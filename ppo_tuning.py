@@ -5,41 +5,48 @@ from stable_baselines3 import PPO
 from ppo_trainer import make_env
 import json
 import numpy as np
-import numpy as np
 
-
-def evaluate_model(model, env, n_eval_episodes=10):
+def evaluate_model(model, env, n_eval_episodes=10, max_steps=5000, deterministic=False):
     episode_rewards = []
+    episode_lengths = []
     action_counter = Counter()
 
     for episode in range(n_eval_episodes):
         obs = env.reset()
-        done = False
         total_reward = 0.0
+        step_count = 0
+        done = False
 
-        while not done:
-            action, _ = model.predict(obs, deterministic=False)
+        while not done and step_count < max_steps:
+            action, _ = model.predict(obs, deterministic=deterministic)
 
             for a in np.array(action).flatten():
                 action_counter[int(a)] += 1
 
             obs, reward, dones, infos = env.step(action)
 
-            total_reward += float(np.mean(reward))
-            done = bool(np.any(dones))
+            # Gebruik sum in plaats van mean, anders verdwijnt reward snel in nullen
+            total_reward += float(np.sum(reward))
+            step_count += 1
+
+            # Stop pas als alle vector-envs klaar zijn
+            done = bool(np.all(dones))
 
         episode_rewards.append(total_reward)
-
-    mean_reward = float(np.mean(episode_rewards))
+        episode_lengths.append(step_count)
 
     total_actions = sum(action_counter.values())
+
     action_distribution = {
-        action: count / total_actions
+        int(action): count / total_actions
         for action, count in action_counter.items()
-    }
+    } if total_actions > 0 else {}
 
     return {
-        "mean_episode_reward": mean_reward,
+        "mean_episode_reward": float(np.mean(episode_rewards)),
+        "episode_rewards": episode_rewards,
+        "mean_episode_length": float(np.mean(episode_lengths)),
+        "episode_lengths": episode_lengths,
         "action_distribution": action_distribution,
     }
 
@@ -47,14 +54,17 @@ def compute_tuning_score(eval_stats):
     mean_reward = eval_stats["mean_episode_reward"]
     action_distribution = eval_stats["action_distribution"]
 
+    if len(action_distribution) == 0:
+        return float(mean_reward)
+
     max_action_ratio = max(action_distribution.values())
 
-    # Straf als één actie extreem vaak wordt gekozen
-    action_collapse_penalty = max_action_ratio
+    if max_action_ratio > 0.90:
+        collapse_penalty = 0.1
+    else:
+        collapse_penalty = 0.0
 
-    score = mean_reward - 0.1 * action_collapse_penalty
-
-    return score
+    return float(mean_reward - collapse_penalty)
 
 def run_experiment(config):
     train_env = make_env(
@@ -78,18 +88,24 @@ def run_experiment(config):
         gae_lambda=config["gae_lambda"],
         clip_range=config["clip_range"],
         ent_coef=config["ent_coef"],
-        verbose=0,
+        verbose=1,
         tensorboard_log="logs/tensorboard_tuning",
     )
 
     model.learn(total_timesteps=config["total_timesteps"])
 
-    score = evaluate_model(model, eval_env)
+    eval_stats = evaluate_model(
+        model,
+        eval_env,
+        n_eval_episodes=10
+    )
+
+    score = compute_tuning_score(eval_stats)
 
     train_env.close()
     eval_env.close()
 
-    return model, score
+    return model, score, eval_stats
 
 
 def main():
@@ -97,9 +113,9 @@ def main():
     Path("logs/tuning").mkdir(parents=True, exist_ok=True)
 
     search_space = {
-        "learning_rate": [1e-4, 2.5e-4],
-        "ent_coef": [0.02, 0.05, 0.1],
-        "n_steps": [256, 512, 1024],
+        "learning_rate": [1e-4, 2.5e-4, 5e-4],
+        "ent_coef": [0.0, 0.001, 0.005, 0.01],
+        "n_steps": [512, 1024, 2048],
         "clip_range": [0.1, 0.2],
     }
 
@@ -128,17 +144,21 @@ def main():
         print(f"\n=== Run {run_id + 1}/{len(combinations)} ===")
         print(config)
 
-        model, score = run_experiment(config)
+        model, score, eval_stats = run_experiment(config)
 
         result = {
             "run_id": run_id,
             "score": score,
+            "mean_episode_reward": eval_stats["mean_episode_reward"],
+            "action_distribution": eval_stats["action_distribution"],
             "config": config,
         }
 
         all_results.append(result)
 
         print(f"Score: {score:.4f}")
+        print(f"Mean episode reward: {eval_stats['mean_episode_reward']:.4f}")
+        print(f"Action distribution: {eval_stats['action_distribution']}")
 
         if score > best_score:
             print("Nieuwe beste configuratie gevonden. Model wordt opgeslagen.")
