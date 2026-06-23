@@ -1,0 +1,5 @@
+*.mp4
+.venv
+*.pyc
+logs
+checkpoints

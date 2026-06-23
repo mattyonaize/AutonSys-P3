@@ -1,0 +1,9 @@
+pettingzoo[atari]>=1.24.0
+stable-baselines3>=2.3.0
+supersuit>=3.9.0
+gymnasium>=0.29.0
+ale-py>=0.8.1
+autorom[accept-rom-license]
+numpy>=1.26,<2.0
+imageio>=2.34.0
+imageio-ffmpeg>=0.4.9
