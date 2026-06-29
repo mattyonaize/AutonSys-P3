@@ -1,0 +1,14 @@
+{
+    "controlled_agent": "third_0",
+    "obs_type": "grayscale_image",
+    "frame_size": 84,
+    "stack_size": 4,
+    "terminal_reward_scale": 5.0,
+    "alive_reward": 0.0,
+    "no_op_penalty": 0.05,
+    "repeat_action_penalty": 0.005,
+    "total_timesteps": 1000000,
+    "n_envs": 8,
+    "seed": 42,
+    "policy": "CnnPolicy"
+}
