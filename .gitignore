@@ -3,3 +3,5 @@
 *.pyc
 logs
 checkpoints
+models/tuning/
+warlords_videos/
