@@ -4,7 +4,8 @@ class PPOAgent:
 
     def __init__(self, model_path):
 
-        self.model = PPO.load(model_path)
+        # self.model = PPO.load(model_path)
+        pass
 
     def act(self, observation):
 
@@ -14,3 +15,4 @@ class PPOAgent:
         )
 
         return int(action)
+        
